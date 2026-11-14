@@ -31,7 +31,7 @@ const (
 func main() {
 	server, err := incus.ConnectIncusUnix("", nil)
 	if err != nil {
-		log.Error("Could not connect to Incus socket", "error", err)
+		log.Fatal("Could not connect to Incus socket", "error", err)
 	}
 
 	srv, err := wish.NewServer(
@@ -45,7 +45,7 @@ func main() {
 	)
 
 	if err != nil {
-		log.Error("Could not start server", "error", err)
+		log.Fatal("Could not start server", "error", err)
 	}
 
 	done := make(chan os.Signal, 1)
@@ -54,7 +54,7 @@ func main() {
 	go func() {
 		log.Info("Starting SSH server", "host", host, "port", port)
 
-		if err = srv.ListenAndServe(); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
 			log.Error("Could not start server", "error", err)
 			done <- nil
 		}
@@ -95,19 +95,13 @@ func vmConnection(server incus.InstanceServer, sess ssh.Session) {
 	result, err := program.Run()
 	if err != nil {
 		log.Error("Bubble Tea failed", "error", err)
-
-		if err := sess.Exit(1); err != nil {
-			log.Error("Could not exit connection", "error", err)
-		}
-
+		tryExit(sess, 1)
 		return
 	}
 
-	if model, ok := result.(model); ok && model.choice != "Yes, I agree" {
-		if err := sess.Exit(0); err != nil {
-			log.Error("Could not exit connection", "error", err)
-		}
-
+	model, ok := result.(model)
+	if !ok || model.choice != "Yes, I agree" {
+		tryExit(sess, 0)
 		return
 	}
 
@@ -154,13 +148,21 @@ func vmConnection(server incus.InstanceServer, sess ssh.Session) {
 	op, err := server.ExecInstance(name, req, &args)
 	if err != nil {
 		log.Error("Could not execute command on VM", "error", err)
+		tryExit(sess, 1)
+		return
 	}
 
 	if err := op.WaitContext(sess.Context()); err != nil {
 		log.Error("Could not wait for VM", "error", err)
+		tryExit(sess, 1)
+		return
 	}
 
-	if err := sess.Exit(0); err != nil {
+	tryExit(sess, 0)
+}
+
+func tryExit(sess ssh.Session, code int) {
+	if err := sess.Exit(code); err != nil {
 		log.Error("Could not exit connection", "error", err)
 	}
 }
