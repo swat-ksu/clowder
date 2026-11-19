@@ -1,11 +1,16 @@
-package next
+package main
 
 import (
 	"fmt"
 	"os"
+
+	"charm.land/log/v2"
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal("fatal error", "error", err)
+	}
 }
 
 func run() error {

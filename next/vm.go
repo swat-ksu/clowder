@@ -1,4 +1,4 @@
-package next
+package main
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"charm.land/log/v2"
 
@@ -75,8 +76,8 @@ func (h *Hypervisor) Run() error {
 		return fmt.Errorf("pinging Cloud Hypervisor: %w", err)
 	}
 
-	if res.JSON200 != nil {
-		return fmt.Errorf("pinging Cloud Hypervisor status: %s", res.Status())
+	if res.JSON200 == nil {
+		return fmt.Errorf("pinging Cloud Hypervisor status: %v", res.StatusCode())
 	}
 
 	log.Print("ping", "data", res.JSON200)
@@ -103,10 +104,31 @@ func NewHypervisor(tmpdir string) (hypervisor *Hypervisor, err error) {
 		}
 	}()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	var d net.Dialer
+
+	for {
+		conn, err := d.DialContext(ctx, "unix", socketPath)
+		if err == nil {
+			conn.Close()
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("waiting for Cloud Hypervisor socket: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				var d net.Dialer
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				return d.DialContext(ctx, "unix", socketPath)
 			},
 		},
