@@ -9,6 +9,7 @@ require (
 	charm.land/log/v2 v2.0.1
 	charm.land/ssh v0.4.3
 	charm.land/wish/v2 v2.0.5
+	github.com/google/go-containerregistry v0.22.1
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/lxc/incus/v7 v7.6.0
 	github.com/oapi-codegen/runtime v1.9.0
@@ -37,6 +38,8 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
+	github.com/docker/cli v29.7.2+incompatible // indirect
+	github.com/docker/docker-credential-helpers v0.9.3 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/flosch/pongo2/v6 v6.1.0 // indirect
@@ -100,6 +103,7 @@ require (
 	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gotest.tools/v3 v3.5.2 // indirect
 )
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
