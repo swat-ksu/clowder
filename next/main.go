@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"charm.land/log/v2"
 )
@@ -14,6 +16,9 @@ func main() {
 }
 
 func run() error {
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
 	tmpdir, err := os.MkdirTemp("data", "vm-*")
 	if err != nil {
 		return fmt.Errorf("creating tempdir: %w", err)
@@ -36,6 +41,9 @@ func run() error {
 	if err := hypervisor.Run(); err != nil {
 		return fmt.Errorf("run: %w", err)
 	}
+
+	<-done
+	log.Info("Shutting down")
 
 	return nil
 }

@@ -68,23 +68,6 @@ type Hypervisor struct {
 	client *api.ClientWithResponses
 }
 
-func (h *Hypervisor) Run() error {
-	ctx := context.Background()
-
-	res, err := h.client.GetVmmPingWithResponse(ctx)
-	if err != nil {
-		return fmt.Errorf("pinging Cloud Hypervisor: %w", err)
-	}
-
-	if res.JSON200 == nil {
-		return fmt.Errorf("pinging Cloud Hypervisor status: %v", res.StatusCode())
-	}
-
-	log.Print("ping", "data", res.JSON200)
-
-	return nil
-}
-
 func NewHypervisor(tmpdir string) (hypervisor *Hypervisor, err error) {
 	socketPath := filepath.Join(tmpdir, "cloud-hypervisor.sock")
 
@@ -142,9 +125,81 @@ func NewHypervisor(tmpdir string) (hypervisor *Hypervisor, err error) {
 	return &Hypervisor{cmd, client}, nil
 }
 
+func (h *Hypervisor) Run() error {
+	ctx := context.Background()
+
+	ping, err := h.client.GetVmmPingWithResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("pinging Cloud Hypervisor: %w", err)
+	}
+	if ping.StatusCode() != http.StatusOK {
+		return fmt.Errorf("pinging Cloud Hypervisor status: %v", ping.StatusCode())
+	}
+
+	log.Print("ping", "data", ping.JSON200)
+
+	body := api.CreateVMJSONRequestBody{
+		Console: &api.ConsoleConfig{
+			Mode:   api.ConsoleModeSocket,
+			Socket: new("console.sock"),
+		},
+		Cpus: &api.CpusConfig{
+			BootVcpus: 1,
+			MaxVcpus:  1,
+		},
+		Memory: &api.MemoryConfig{
+			Size: 512 * 1024 * 1024,
+		},
+		Disks: &[]api.DiskConfig{
+			{
+				ImageType: new(api.ImageTypeRaw),
+				Path:      new(os.Getenv("DISK")),
+			},
+		},
+		Payload: api.PayloadConfig{
+			Cmdline: new("console=hvc0 root=/dev/vda1 rw init=/bin/sh"),
+			Kernel:  new(os.Getenv("KERNEL")),
+		},
+	}
+
+	create, err := h.client.CreateVMWithResponse(ctx, body)
+	if err != nil {
+		return fmt.Errorf("creating Cloud Hypervisor VM: %w", err)
+	}
+	if create.StatusCode() != http.StatusNoContent {
+		return fmt.Errorf("creating Cloud Hypervisor VM status: %v", create.StatusCode())
+	}
+
+	boot, err := h.client.BootVMWithResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("booting Cloud Hypervisor VM: %w", err)
+	}
+	if boot.StatusCode() != http.StatusNoContent {
+		return fmt.Errorf("booting Cloud Hypervisor VM status: %v", boot.StatusCode())
+	}
+
+	info, err := h.client.GetVmInfoWithResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("querying Cloud Hypervisor VM: %w", err)
+	}
+	if info.StatusCode() != http.StatusOK {
+		return fmt.Errorf("querying Cloud Hypervisor VM status: %v", info.StatusCode())
+	}
+
+	log.Print("info", "data", info.JSON200)
+
+	return nil
+}
+
 func (h *Hypervisor) Close() error {
-	if err := h.cmd.Process.Kill(); err != nil {
-		return fmt.Errorf("killing Cloud Hypervisor: %w", err)
+	ctx := context.Background()
+
+	shutdown, err := h.client.ShutdownVMMWithResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("shutting down Cloud Hypervisor: %w", err)
+	}
+	if shutdown.StatusCode() != http.StatusNoContent {
+		return fmt.Errorf("shutting down Cloud Hypervisor status: %v", shutdown.StatusCode())
 	}
 
 	if err := h.cmd.Wait(); err != nil {
