@@ -45,22 +45,26 @@ func PullData(tmpdir string) (*VmData, error) {
 	reader := mutate.Extract(img)
 	defer reader.Close()
 
-	dir := filepath.Join(tmpdir, "rootfs")
+	rootfs := filepath.Join(tmpdir, "root.ext4")
 
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("creating rootfs: %w", err)
+	truncate := exec.Command("truncate", "-s", "1G", rootfs)
+	truncate.Stdout = os.Stdout
+	truncate.Stderr = os.Stderr
+
+	if err := truncate.Run(); err != nil {
+		return nil, fmt.Errorf("creating .ext4: %w", err)
 	}
 
-	cmd := exec.Command("tar", "-xf", "-", "-C", dir)
-	cmd.Stdin = reader
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	mkfs := exec.Command("mkfs.ext4", "-d", "-", rootfs)
+	mkfs.Stdin = reader
+	mkfs.Stdout = os.Stdout
+	mkfs.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("extracting rootfs: %w", err)
+	if err := mkfs.Run(); err != nil {
+		return nil, fmt.Errorf("extracting .ext4: %w", err)
 	}
 
-	return &VmData{rootfs: dir, cfg: cfg}, nil
+	return &VmData{rootfs, cfg}, nil
 }
 
 type Hypervisor struct {
@@ -125,7 +129,7 @@ func NewHypervisor(tmpdir string) (hypervisor *Hypervisor, err error) {
 	return &Hypervisor{cmd, client}, nil
 }
 
-func (h *Hypervisor) Run() error {
+func (h *Hypervisor) Run(data *VmData) error {
 	ctx := context.Background()
 
 	ping, err := h.client.GetVmmPingWithResponse(ctx)
@@ -153,7 +157,7 @@ func (h *Hypervisor) Run() error {
 		Disks: &[]api.DiskConfig{
 			{
 				ImageType: new(api.ImageTypeRaw),
-				Path:      new(os.Getenv("DISK")),
+				Path:      new(data.rootfs),
 			},
 		},
 		Payload: api.PayloadConfig{

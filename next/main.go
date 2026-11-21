@@ -26,7 +26,7 @@ func run() error {
 
 	defer os.RemoveAll(tmpdir)
 
-	_, err = PullData(tmpdir)
+	data, err := PullData(tmpdir)
 	if err != nil {
 		return fmt.Errorf("pulling data: %w", err)
 	}
@@ -38,7 +38,7 @@ func run() error {
 
 	defer hypervisor.Close()
 
-	if err := hypervisor.Run(); err != nil {
+	if err := hypervisor.Run(data); err != nil {
 		return fmt.Errorf("run: %w", err)
 	}
 
